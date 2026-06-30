@@ -4,9 +4,12 @@
 // Installed globally. Reads rules from each project's .claude/critic-rules/.
 // No rules in a project = no check. Uses `claude -p` — no API key needed.
 
-import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, readdirSync, appendFileSync } from 'fs';
+import { join, basename } from 'path';
 import { execSync } from 'child_process';
+import { homedir } from 'os';
+
+const LOG_FILE = join(homedir(), '.claude', 'critic.log');
 
 async function main() {
   const chunks = [];
@@ -93,17 +96,18 @@ Respond with ONLY valid JSON, nothing else:
     const verdict = JSON.parse(jsonMatch[0]);
 
     if (verdict.ok === false && verdict.reason) {
-      // Block — tell Claude to fix the violation
-      const output = JSON.stringify({
-        decision: 'block',
-        reason: `[CRITIC] ${verdict.reason}`
-      });
-      process.stdout.write(output);
+      const reason = `[CRITIC] ${verdict.reason}`;
+      const project = basename(input.cwd);
+      const preview = assistant_message.slice(0, 200).replace(/\n/g, ' ');
+      const logLine = `[${new Date().toISOString()}] BLOCKED | ${project} | ${reason}\n  Response preview: ${preview}...\n\n`;
+      try { appendFileSync(LOG_FILE, logLine); } catch {}
+      process.stdout.write(JSON.stringify({ decision: 'block', reason }));
     }
 
     process.exit(0);
   } catch (err) {
-    // Never block the user on critic errors — fail open
+    const logLine = `[${new Date().toISOString()}] ERROR | ${err.message}\n\n`;
+    try { appendFileSync(LOG_FILE, logLine); } catch {}
     process.exit(0);
   }
 }

@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 
 // Claude Code Stop hook: critic-in-the-loop
-// Checks assistant responses against project rules before they reach the user.
-// Uses `claude -p` (Claude Code CLI) — no API key needed, uses your subscription.
+// Installed globally. Reads rules from each project's .claude/critic-rules/.
+// No rules in a project = no check. Uses `claude -p` — no API key needed.
 
 import { readFileSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { execSync } from 'child_process';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const chunks = [];
@@ -28,13 +25,13 @@ async function main() {
     process.exit(0);
   }
 
-  // Load rules from the rules/ directory
-  const rulesDir = join(__dirname, 'rules');
+  // Load rules from the project's .claude/critic-rules/ directory
+  const rulesDir = join(input.cwd, '.claude', 'critic-rules');
   let ruleFiles;
   try {
     ruleFiles = readdirSync(rulesDir).filter(f => f.endsWith('.md'));
   } catch {
-    process.exit(0); // No rules directory — nothing to check
+    process.exit(0); // No critic-rules in this project — skip
   }
 
   if (ruleFiles.length === 0) {

@@ -2,6 +2,8 @@
 
 Critic-in-the-loop hook for Claude Code. A second AI reviews every response against your project rules **before it reaches you**. Violations get sent back for revision automatically.
 
+Installed once globally. Rules are per-project. No rules in a project = no check.
+
 Uses `claude -p` (Claude Code CLI) — no API key needed, runs on your existing subscription.
 
 ## How it works
@@ -9,15 +11,16 @@ Uses `claude -p` (Claude Code CLI) — no API key needed, runs on your existing 
 ```
 Claude writes response
        ↓
-  Stop hook fires
+  Stop hook fires (global)
        ↓
-  critic.mjs reads response + loads rules from rules/
+  critic.mjs checks {project}/.claude/critic-rules/
        ↓
-  Calls `claude -p --model opus` with critic prompt
+  No rules? → skip, response goes through
+  Rules found? → call `claude -p --model opus` with critic prompt
        ↓
   Critic returns {"ok": true} or {"ok": false, "reason": "..."}
        ↓
-  ok=true → response reaches you
+  ok=true  → response reaches you
   ok=false → Claude gets the reason and keeps working
 ```
 
@@ -27,22 +30,29 @@ Claude writes response
 git clone https://github.com/coolk8/claude-code-critic
 cd claude-code-critic
 chmod +x install.sh
-./install.sh /path/to/your/project
+./install.sh
 ```
 
-This adds a `Stop` hook to your project's `.claude/settings.local.json`.
+This adds a `Stop` hook to your global `~/.claude/settings.json`.
 
-## Rules
+## Add rules to a project
 
-Rules are markdown files in `rules/`. Each rule describes what to check and when it applies.
+```bash
+mkdir -p /path/to/project/.claude/critic-rules
+cp example-rules/no-guessing.md /path/to/project/.claude/critic-rules/
+```
 
-Included rule:
+Each `.md` file in `.claude/critic-rules/` is a rule. Add as many as you need per project.
 
-- **no-guessing** — when solving problems, every diagnosis must be backed by logs, docs, or code inspection. No speculating without evidence.
+## Example rule: no-guessing
 
-### Add your own rule
+> When solving a problem, every diagnosis must be backed by logs, docs, or code inspection. No speculating without evidence.
 
-Create `rules/my-rule.md`:
+See `example-rules/no-guessing.md` for the full rule.
+
+## Write your own rule
+
+Create `.claude/critic-rules/my-rule.md` in your project:
 
 ```markdown
 # My Rule
@@ -64,10 +74,11 @@ Does NOT apply when:
 
 ## Design decisions
 
-- **Fail open** — if the critic errors out, the response goes through. Never blocks the user on infrastructure failures.
-- **Loop protection** — yields after one block per turn (checks `stop_hook_active`). Claude Code also has a built-in cap of 8 consecutive blocks.
-- **Skip trivial responses** — responses under 100 chars bypass the critic (confirmations, short answers).
-- **No dependencies** — pure Node.js, no npm install needed.
+- **Global hook, per-project rules** — install once, configure per project
+- **Fail open** — if the critic errors, the response goes through
+- **Loop protection** — yields if `stop_hook_active` is true (already blocked once this turn)
+- **Skip trivial responses** — responses under 100 chars bypass the critic
+- **No dependencies** — pure Node.js 18+, no npm install
 
 ## Requirements
 

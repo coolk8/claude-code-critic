@@ -101,6 +101,7 @@ Respond with ONLY valid JSON, nothing else:
       const preview = assistant_message.slice(0, 200).replace(/\n/g, ' ');
       const logLine = `[${new Date().toISOString()}] BLOCKED | ${project} | ${reason}\n  Response preview: ${preview}...\n\n`;
       try { appendFileSync(LOG_FILE, logLine); } catch {}
+      process.stderr.write('\x07');
       process.stdout.write(JSON.stringify({ decision: 'block', reason }));
     }
 
